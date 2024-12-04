@@ -1,6 +1,6 @@
-# detect.py
 import sys
 import torch
+from torch import nn
 from torchvision import transforms
 from PIL import Image
 import matplotlib.pyplot as plt
@@ -11,31 +11,8 @@ transform = transforms.Compose([
     transforms.Resize((28, 28)),
     transforms.Grayscale(),
     transforms.ToTensor(),
+    transforms.Lambda(lambda x: 1 - x),  # Odwrócenie kolorów
 ])
-
-# Zdefiniujmy model
-class NeuralNetwork(torch.nn.Module):
-    def __init__(self):
-        super(NeuralNetwork, self).__init__()
-        self.flatten = torch.nn.Flatten()
-        self.linear_relu_stack = torch.nn.Sequential(
-            torch.nn.Linear(28*28, 512),
-            torch.nn.ReLU(),
-            torch.nn.Linear(512, 512),
-            torch.nn.ReLU(),
-            torch.nn.Linear(512, 10),
-        )
-
-    def forward(self, x):
-        x = self.flatten(x)
-        logits = self.linear_relu_stack(x)
-        return logits
-
-model = NeuralNetwork()
-
-# Wczytajmy wagi modelu z flagą weights_only=True
-model.load_state_dict(torch.load("model.pth", weights_only=True))
-model.eval()
 
 # Zdefiniujmy etykiety klas
 classes = [
@@ -51,28 +28,157 @@ classes = [
     "Ankle boot",
 ]
 
-# Wczytajmy obrazek
-image_path = sys.argv[1]
-image = Image.open(image_path).convert("RGB")
-image_tensor = transform(image).unsqueeze(0)
+# Wczytaj obrazek
+try:
+    image_path = sys.argv[1]
+    image = Image.open(image_path).convert("RGB")
+    image_tensor = transform(image).unsqueeze(0)
+except Exception as e:
+    print(f"Error loading image: {e}")
+    sys.exit(1)
 
-# Przeprowadźmy klasyfikację
-with torch.no_grad():
-    pred = model(image_tensor)
-    probabilities = torch.nn.functional.softmax(pred, dim=1).squeeze()
-    predicted = torch.argmax(probabilities).item()
+# Definiujmy klasy modeli
+model_paths = {
+    "model_v1.pth": "Model v1",
+    "model_v2.pth": "Model v2",
+    "model_v3.pth": "Model v3",
+    "model_v1.pth_sgd": "Model v1 SGD",
+    "model_v2.pth_sgd": "Model v2 SGD",
+    "model_v3.pth_sgd": "Model v3 SGD",
+}
 
-# Wyświetlmy wynik
-print(classes[predicted])
+# Klasy modeli
+class NeuralNetwork_v1(nn.Module):
+    def __init__(self):
+        super(NeuralNetwork_v1, self).__init__()
+        self.flatten = nn.Flatten()
+        self.linear_relu_stack = nn.Sequential(
+            nn.Linear(28 * 28, 512),
+            nn.ReLU(),
+            nn.Linear(512, 512),
+            nn.ReLU(),
+            nn.Linear(512, 10),
+        )
 
-# Wyświetlmy prawdopodobieństwa predykcji dla każdej klasy
-plt.bar(classes, probabilities.numpy())
-plt.xticks(rotation=45)
-plt.title("Prawdopodobieństwa predykcji dla każdej klasy")
-plt.show()
+    def forward(self, x):
+        x = self.flatten(x)
+        logits = self.linear_relu_stack(x)
+        return logits
 
-# Wyświetlmy obraz wejściowy z nałożoną etykietą predykcji
-plt.imshow(image, cmap='gray')
-plt.title(f"Predykcja: {classes[predicted]} (Prawdopodobieństwo: {probabilities[predicted]:.2f})")
-plt.axis('off')
-plt.show()
+
+class NeuralNetwork_v2(nn.Module):
+    def __init__(self):
+        super(NeuralNetwork_v2, self).__init__()
+        self.conv1 = nn.Conv2d(in_channels=1, out_channels=16, kernel_size=3, stride=1, padding=1)
+        self.relu = nn.ReLU()
+        self.flatten = nn.Flatten()
+        self.linear_relu_stack = nn.Sequential(
+            nn.Linear(16 * 28 * 28, 256),
+            nn.ReLU(),
+            nn.Linear(256, 10),
+        )
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.relu(x)
+        x = self.flatten(x)
+        logits = self.linear_relu_stack(x)
+        return logits
+
+
+class NeuralNetwork_v3(nn.Module):
+    def __init__(self):
+        super(NeuralNetwork_v3, self).__init__()
+        self.conv1 = nn.Conv2d(in_channels=1, out_channels=16, kernel_size=3, stride=1, padding=1)
+        self.conv2 = nn.Conv2d(in_channels=16, out_channels=32, kernel_size=3, stride=1, padding=1)
+        self.relu = nn.ReLU()
+        self.flatten = nn.Flatten()
+        self.linear_relu_stack = nn.Sequential(
+            nn.Linear(32 * 28 * 28, 128),
+            nn.ReLU(),
+            nn.Linear(128, 10),
+        )
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.relu(x)
+        x = self.conv2(x)
+        x = self.relu(x)
+        x = self.flatten(x)
+        logits = self.linear_relu_stack(x)
+        return logits
+
+
+# Klasy modeli z optymalizatorem SGD
+class NeuralNetwork_v1_sgd(NeuralNetwork_v1):
+    pass
+
+
+class NeuralNetwork_v2_sgd(NeuralNetwork_v2):
+    pass
+
+
+class NeuralNetwork_v3_sgd(NeuralNetwork_v3):
+    pass
+
+
+# Mapa klas modeli do ich definicji
+model_classes = {
+    "model_v1.pth": NeuralNetwork_v1,
+    "model_v2.pth": NeuralNetwork_v2,
+    "model_v3.pth": NeuralNetwork_v3,
+    "model_v1.pth_sgd": NeuralNetwork_v1_sgd,
+    "model_v2.pth_sgd": NeuralNetwork_v2_sgd,
+    "model_v3.pth_sgd": NeuralNetwork_v3_sgd,
+}
+
+# Przeprowadźmy klasyfikację dla każdego modelu
+for model_path, model_name in model_paths.items():
+    try:
+        # Inicjalizujmy model
+        model_class = model_classes[model_path]
+        model = model_class()
+
+        # Wczytajmy wagi modelu
+        model.load_state_dict(torch.load(model_path))
+        model.eval()
+
+        # Przeprowadźmy klasyfikację
+        with torch.no_grad():
+            pred = model(image_tensor)
+            probabilities = torch.nn.functional.softmax(pred, dim=1).squeeze()
+            predicted = torch.argmax(probabilities).item()
+
+        # Wyświetlmy wynik
+        print(f"{model_name}: {classes[predicted]} (Prawdopodobieństwo: {probabilities[predicted]:.2f})")
+
+        # Wyświetlmy prawdopodobieństwa predykcji dla każdej klasy
+        plt.figure(figsize=(10, 5))
+        plt.bar(classes, probabilities.numpy())
+        plt.xticks(rotation=45)
+        plt.title(f"Prawdopodobieństwa predykcji dla każdej klasy - {model_name}")
+        plt.show()
+    except Exception as e:
+        print(f"Error with model {model_name}: {e}")
+
+# Wyświetlmy obraz wejściowy z nałożoną etykietą predykcji dla modelu v3 (lub innego wybranego modelu)
+model_path = "model_v3.pth"
+model_name = model_paths[model_path]
+try:
+    model_class = model_classes[model_path]
+    model = model_class()
+    model.load_state_dict(torch.load(model_path))
+    model.eval()
+
+    with torch.no_grad():
+        pred = model(image_tensor)
+        probabilities = torch.nn.functional.softmax(pred, dim=1).squeeze()
+        predicted = torch.argmax(probabilities).item()
+
+    plt.figure(figsize=(8, 6))
+    plt.imshow(image, cmap='gray')
+    plt.title(f"Predykcja: {classes[predicted]} (Prawdopodobieństwo: {probabilities[predicted]:.2f}) - {model_name}")
+    plt.axis('off')
+    plt.show()
+except Exception as e:
+    print(f"Error with final model {model_name}: {e}")

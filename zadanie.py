@@ -8,6 +8,7 @@ from torchvision import datasets, transforms
 transform = transforms.Compose([
     transforms.Resize((28, 28)),
     transforms.ToTensor(),
+    transforms.Lambda(lambda x: 1 - x),  # Odwrócenie kolorów
 ])
 
 # Załadujmy dane treningowe i walidacyjne
