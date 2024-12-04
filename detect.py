@@ -38,13 +38,16 @@ except Exception as e:
     sys.exit(1)
 
 # Definiujmy klasy modeli
-model_paths = {
-    "model_v1.pth": "Model v1",
-    "model_v2.pth": "Model v2",
-    "model_v3.pth": "Model v3",
-    "model_v1.pth_sgd": "Model v1 SGD",
-    "model_v2.pth_sgd": "Model v2 SGD",
-    "model_v3.pth_sgd": "Model v3 SGD",
+model_paths_adam = {
+    "model_v1.pth": "Model v1 Adam",
+    "model_v2.pth": "Model v2 Adam",
+    "model_v3.pth": "Model v3 Adam",
+}
+
+model_paths_sgd = {
+    "model_v1_sgd.pth": "Model v1 SGD",
+    "model_v2_sgd.pth": "Model v2 SGD",
+    "model_v3_sgd.pth": "Model v3 SGD",
 }
 
 # Klasy modeli
@@ -127,43 +130,74 @@ model_classes = {
     "model_v1.pth": NeuralNetwork_v1,
     "model_v2.pth": NeuralNetwork_v2,
     "model_v3.pth": NeuralNetwork_v3,
-    "model_v1.pth_sgd": NeuralNetwork_v1_sgd,
-    "model_v2.pth_sgd": NeuralNetwork_v2_sgd,
-    "model_v3.pth_sgd": NeuralNetwork_v3_sgd,
+    "model_v1_sgd.pth": NeuralNetwork_v1_sgd,
+    "model_v2_sgd.pth": NeuralNetwork_v2_sgd,
+    "model_v3_sgd.pth": NeuralNetwork_v3_sgd,
 }
 
-# Przeprowadźmy klasyfikację dla każdego modelu
-for model_path, model_name in model_paths.items():
-    try:
-        # Inicjalizujmy model
-        model_class = model_classes[model_path]
-        model = model_class()
+# Funkcja do klasyfikacji i wyświetlania wyników
+def classify_and_display(model_paths, model_name_prefix):
+    for model_path, model_name in model_paths.items():
+        try:
+            # Inicjalizujmy model
+            model_class = model_classes[model_path]
+            model = model_class()
 
-        # Wczytajmy wagi modelu
-        model.load_state_dict(torch.load(model_path))
-        model.eval()
+            # Wczytajmy wagi modelu
+            model.load_state_dict(torch.load(model_path))
+            model.eval()
 
-        # Przeprowadźmy klasyfikację
-        with torch.no_grad():
-            pred = model(image_tensor)
-            probabilities = torch.nn.functional.softmax(pred, dim=1).squeeze()
-            predicted = torch.argmax(probabilities).item()
+            # Przeprowadźmy klasyfikację
+            with torch.no_grad():
+                pred = model(image_tensor)
+                probabilities = torch.nn.functional.softmax(pred, dim=1).squeeze()
+                predicted = torch.argmax(probabilities).item()
 
-        # Wyświetlmy wynik
-        print(f"{model_name}: {classes[predicted]} (Prawdopodobieństwo: {probabilities[predicted]:.2f})")
+            # Wyświetlmy wynik
+            print(f"{model_name}: {classes[predicted]} (Prawdopodobieństwo: {probabilities[predicted]:.2f})")
 
-        # Wyświetlmy prawdopodobieństwa predykcji dla każdej klasy
-        plt.figure(figsize=(10, 5))
-        plt.bar(classes, probabilities.numpy())
-        plt.xticks(rotation=45)
-        plt.title(f"Prawdopodobieństwa predykcji dla każdej klasy - {model_name}")
-        plt.show()
-    except Exception as e:
-        print(f"Error with model {model_name}: {e}")
+            # Wyświetlmy prawdopodobieństwa predykcji dla każdej klasy
+            plt.figure(figsize=(10, 5))
+            plt.bar(classes, probabilities.numpy())
+            plt.xticks(rotation=45)
+            plt.title(f"Prawdopodobieństwa predykcji dla każdej klasy - {model_name}")
+            plt.show()
+        except Exception as e:
+            print(f"Error with model {model_name}: {e}")
 
-# Wyświetlmy obraz wejściowy z nałożoną etykietą predykcji dla modelu v3 (lub innego wybranego modelu)
+# Klasyfikacja i wyświetlanie wyników dla modeli Adam
+print("\nWyniki dla modeli z optymalizatorem Adam:")
+classify_and_display(model_paths_adam, "Model Adam")
+
+# Klasyfikacja i wyświetlanie wyników dla modeli SGD
+print("\nWyniki dla modeli z optymalizatorem SGD:")
+classify_and_display(model_paths_sgd, "Model SGD")
+
+# Wyświetlmy obraz wejściowy z nałożoną etykietą predykcji dla modelu v3 Adam
 model_path = "model_v3.pth"
-model_name = model_paths[model_path]
+model_name = model_paths_adam[model_path]
+try:
+    model_class = model_classes[model_path]
+    model = model_class()
+    model.load_state_dict(torch.load(model_path))
+    model.eval()
+
+    with torch.no_grad():
+        pred = model(image_tensor)
+        probabilities = torch.nn.functional.softmax(pred, dim=1).squeeze()
+        predicted = torch.argmax(probabilities).item()
+
+    plt.figure(figsize=(8, 6))
+    plt.imshow(image, cmap='gray')
+    plt.title(f"Predykcja: {classes[predicted]} (Prawdopodobieństwo: {probabilities[predicted]:.2f}) - {model_name}")
+    plt.axis('off')
+    plt.show()
+except Exception as e:
+    print(f"Error with final model {model_name}: {e}")
+
+# Wyświetlmy obraz wejściowy z nałożoną etykietą predykcji dla modelu v3 SGD
+model_path = "model_v3_sgd.pth"
+model_name = model_paths_sgd[model_path]
 try:
     model_class = model_classes[model_path]
     model = model_class()
